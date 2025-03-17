@@ -28,25 +28,29 @@ interface ConnectedUser {
 // Store connected users in memory
 let connectedUsers: ConnectedUser[] = [];
 
-// Function to remove users inactive for over 5 minutes
+/**
+ * Removes users who have been inactive for more than 5 minutes
+ * Also cleans up the Redis history for expired entries
+ */
 const removeInactiveUsers = async () => {
   const now = Date.now();
   
+  // Remove users connected more than 5 minutes ago
   connectedUsers = connectedUsers.filter((user) => {
     const elapsedTime = now - user.connectedAt;
     if (elapsedTime > 5 * 60 * 1000) {
       console.log(`Removing inactive user: ${user.username}`);
-      return false; // Remove user
+      return false;
     }
     return true;
   });
 
-  // Keep only the most recent 5 users if we exceed that limit
+  // Maintain maximum of 5 connected users
   if (connectedUsers.length > 5) {
     connectedUsers = connectedUsers.slice(-5);
   }
 
-  // Remove expired entries from Redis
+  // Clean up Redis history for expired entries (older than 5 minutes)
   const history = await redisClient.lRange("connectionHistory", 0, -1);
   for (const entry of history) {
     const { username, connectedAt } = JSON.parse(entry);
@@ -55,15 +59,17 @@ const removeInactiveUsers = async () => {
     }
   }
 
-  // Broadcast updated list
+  // Update all clients with the new lists
   broadcastConnectionHistory();
 };
 
-
-// Function to broadcast connection history
+/**
+ * Broadcasts the current state (connected users and history)
+ * to all connected WebSocket clients
+ */
 const broadcastConnectionHistory = async () => {
   try {
-    // Get current connected users
+    // Get current active users
     const userList = connectedUsers.map(user => ({
       username: user.username,
       connectedAt: user.connectedAt
@@ -73,6 +79,7 @@ const broadcastConnectionHistory = async () => {
     const history = await redisClient.lRange("connectionHistory", 0, -1);
     const connectionHistory = history.map(entry => JSON.parse(entry));
 
+    // Prepare the payload
     const payload = {
       type: "connectionHistory",
       data: {
@@ -83,7 +90,7 @@ const broadcastConnectionHistory = async () => {
 
     console.log('Broadcasting:', payload);
 
-    // Broadcast to all connected clients
+    // Send to all connected clients
     wss.clients.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify(payload));
@@ -103,6 +110,7 @@ wss.on("connection", (ws) => {
       const data = JSON.parse(message.toString());
       console.log('Received message:', data);
       
+      // Handle user registration
       if (data.type === "register") {
         const username = data.username || `User-${Math.floor(Math.random() * 1000)}`;
         const connectedAt = Date.now();
@@ -110,24 +118,24 @@ wss.on("connection", (ws) => {
 
         console.log('Registering new user:', userEntry);
 
-        // Add user to connected users list
+        // Add to active users
         connectedUsers.push(userEntry);
 
-        // Keep only the most recent 5 users if we exceed that limit
+        // Maintain maximum of 5 connected users
         if (connectedUsers.length > 5) {
           connectedUsers = connectedUsers.slice(-5);
         }
 
-        // Store in Redis connection history
+        // Add to connection history in Redis
         await redisClient.lPush("connectionHistory", JSON.stringify(userEntry));
         
-        // Keep only the latest 10 entries in history
+        // Maintain maximum of 10 history entries
         await redisClient.lTrim("connectionHistory", 0, 9);
 
         console.log('Current connected users:', connectedUsers);
         console.log('User connected:', username);
 
-        // Broadcast updated lists to all clients
+        // Update all clients
         await broadcastConnectionHistory();
       }
     } catch (error) {
@@ -140,7 +148,7 @@ wss.on("connection", (ws) => {
   });
 });
 
-// Periodically remove inactive users every 1 minute
+// Check for inactive users every minute
 setInterval(removeInactiveUsers, 60 * 1000);
 
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -161,6 +169,6 @@ server.on("upgrade", (request, socket, head) => {
       wss.emit("connection", ws, request);
     });
   } else {
-    socket.destroy(); // Reject other upgrade requests
+    socket.destroy(); // Reject non-WebSocket upgrade requests
   }
 });
