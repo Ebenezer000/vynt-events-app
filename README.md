@@ -28,4 +28,4 @@ A simple real-time event dispatching application for Vynt using **Node.js, Expre
 
 ## Application Screen
 
-![Application Screen](https://github.com/[Ebenezer000]/[vynt-events-app]/blob/[main]/running-dispatcher.png?raw=true)
+![Application Screen](https://github.com/Ebenezer000/vynt-events-app/blob/main/public/assets/running-dispatcher.png?raw=true)
