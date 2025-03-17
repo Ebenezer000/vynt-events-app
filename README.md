@@ -25,3 +25,7 @@ A simple real-time event dispatching application for Vynt using **Node.js, Expre
 4. Start Server
    ```bash
    npm start
+
+## Application Screen
+
+![alt text](https://github.com/[Ebenezer000]/[vynt-events-app]/blob/[main]/running-dispatcher.png?raw=true)
